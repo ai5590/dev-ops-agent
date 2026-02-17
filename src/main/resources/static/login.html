@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevOps Agent - Login</title>
+    <title>DevOps Agent - Вход</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -98,22 +98,22 @@
 <body>
     <div class="login-container">
         <h1>DevOps Agent</h1>
-        <p class="subtitle">Sign in to continue</p>
+        <p class="subtitle">Войдите для продолжения</p>
 
-        <div id="errorMsg" class="msg msg-error hidden">Invalid username or password.</div>
-        <div id="logoutMsg" class="msg msg-logout hidden">You have been logged out.</div>
+        <div id="errorMsg" class="msg msg-error hidden">Неверное имя пользователя или пароль</div>
+        <div id="logoutMsg" class="msg msg-logout hidden">Вы вышли из системы</div>
 
         <form id="loginForm" action="/login" method="POST">
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="username">Имя пользователя</label>
                 <input type="text" id="username" name="username" autocomplete="username" required autofocus>
             </div>
             <div class="form-group">
-                <label for="password">Password</label>
+                <label for="password">Пароль</label>
                 <input type="password" id="password" name="password" autocomplete="current-password" required>
             </div>
             <input type="hidden" id="csrfToken" name="_csrf" value="">
-            <button type="submit" class="btn-login">Sign In</button>
+            <button type="submit" class="btn-login">Войти</button>
         </form>
     </div>
 

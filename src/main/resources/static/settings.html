@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Agent - Настройки</title>
+    <link rel="stylesheet" href="/chat.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/chat" class="nav-link">Чат</a>
+            <a href="/settings" class="nav-link active">Настройки</a>
+            <a href="/servers" class="nav-link">Серверы</a>
+            <a href="/help" class="nav-link">Справка</a>
+        </div>
+        <div class="nav-right"></div>
+    </nav>
+
+    <div class="page-content">
+        <div class="container">
+            <div class="card">
+                <h2 class="card-title">Настройки LLM</h2>
+
+                <div class="form-group">
+                    <label for="llmServerSelect">LLM сервер:</label>
+                    <select id="llmServerSelect"></select>
+                </div>
+
+                <div class="form-group">
+                    <label for="modelOverride">Модель (переопределение):</label>
+                    <input type="text" id="modelOverride" placeholder="по умолчанию из конфига">
+                </div>
+
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="showDebugCheckbox">
+                        <span>Показать детали (debug)</span>
+                    </label>
+                </div>
+
+                <div id="effectiveInfo" class="info-block"></div>
+
+                <div class="button-row">
+                    <button class="btn-primary" onclick="saveSettings()">Сохранить</button>
+                    <button class="btn-secondary" onclick="reloadConfig()">Обновить настройки</button>
+                </div>
+
+                <div id="statusMessage" class="status-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function getCsrfToken() {
+            var match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
+        function apiFetch(url, options) {
+            options = options || {};
+            var headers = { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': getCsrfToken() };
+            if (options.headers) {
+                for (var k in options.headers) headers[k] = options.headers[k];
+            }
+            options.headers = headers;
+            options.credentials = 'same-origin';
+            return fetch(url, options).then(function(r) {
+                if (r.status === 401 || r.status === 403) {
+                    window.location.href = '/login';
+                    throw new Error('Сессия истекла');
+                }
+                return r.json();
+            });
+        }
+
+        function showStatus(msg, isError) {
+            var el = document.getElementById('statusMessage');
+            el.textContent = msg;
+            el.className = 'status-message ' + (isError ? 'status-error' : 'status-success');
+            el.style.display = 'block';
+            setTimeout(function() { el.style.display = 'none'; }, 4000);
+        }
+
+        function loadSettings() {
+            Promise.all([
+                apiFetch('/api/user/settings'),
+                apiFetch('/api/llm-servers')
+            ]).then(function(results) {
+                var settings = results[0];
+                var servers = results[1];
+
+                var select = document.getElementById('llmServerSelect');
+                select.innerHTML = '';
+                var serverList = servers.servers || servers || [];
+                for (var i = 0; i < serverList.length; i++) {
+                    var opt = document.createElement('option');
+                    opt.value = serverList[i].id || serverList[i].name || i;
+                    opt.textContent = serverList[i].name || serverList[i].id || ('Сервер ' + (i + 1));
+                    select.appendChild(opt);
+                }
+
+                if (settings.llmServer) select.value = settings.llmServer;
+                document.getElementById('modelOverride').value = settings.modelOverride || '';
+                document.getElementById('showDebugCheckbox').checked = settings.showDebug || false;
+
+                updateEffectiveInfo(settings, serverList);
+            }).catch(function(e) {
+                showStatus('Ошибка загрузки настроек: ' + e.message, true);
+            });
+        }
+
+        function updateEffectiveInfo(settings, servers) {
+            var info = document.getElementById('effectiveInfo');
+            var serverName = settings.llmServer || 'по умолчанию';
+            var model = settings.modelOverride || settings.effectiveModel || 'из конфига';
+            info.innerHTML = '<strong>Текущий выбор:</strong> сервер: ' + escapeHtml(serverName) + ', модель: ' + escapeHtml(model);
+        }
+
+        function saveSettings() {
+            var data = {
+                llmServer: document.getElementById('llmServerSelect').value,
+                modelOverride: document.getElementById('modelOverride').value.trim(),
+                showDebug: document.getElementById('showDebugCheckbox').checked
+            };
+            apiFetch('/api/user/settings', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            }).then(function() {
+                showStatus('Настройки сохранены');
+            }).catch(function(e) {
+                showStatus('Ошибка сохранения: ' + e.message, true);
+            });
+        }
+
+        function reloadConfig() {
+            apiFetch('/api/reload', { method: 'POST' }).then(function() {
+                showStatus('Конфигурация обновлена');
+                loadSettings();
+            }).catch(function(e) {
+                showStatus('Ошибка обновления: ' + e.message, true);
+            });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadSettings);
+    </script>
+</body>
+</html>

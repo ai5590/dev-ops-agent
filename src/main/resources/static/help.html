@@ -1,161 +1,117 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevOps Agent - Help</title>
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: #1a1a2e;
-            color: #e0e0e0;
-            min-height: 100vh;
-            padding: 1rem;
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 720px;
-            margin: 0 auto;
-            padding: 1rem 0;
-        }
-        .back-link {
-            display: inline-block;
-            color: #e94560;
-            text-decoration: none;
-            margin-bottom: 1.5rem;
-            font-size: 0.9rem;
-        }
-        .back-link:hover { text-decoration: underline; }
-        h1 {
-            color: #e94560;
-            font-size: 1.75rem;
-            margin-bottom: 0.5rem;
-        }
-        h2 {
-            color: #e94560;
-            font-size: 1.2rem;
-            margin-top: 2rem;
-            margin-bottom: 0.75rem;
-            padding-bottom: 0.35rem;
-            border-bottom: 1px solid #2a2a4a;
-        }
-        h3 {
-            color: #ccc;
-            font-size: 1rem;
-            margin-top: 1.25rem;
-            margin-bottom: 0.5rem;
-        }
-        p { margin-bottom: 0.75rem; color: #bbb; }
-        ul, ol {
-            margin-left: 1.25rem;
-            margin-bottom: 0.75rem;
-            color: #bbb;
-        }
-        li { margin-bottom: 0.35rem; }
-        code {
-            background: #0f3460;
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
-            font-size: 0.85em;
-            color: #e0e0e0;
-        }
-        .risk-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 0.75rem 0;
-        }
-        .risk-table th, .risk-table td {
-            padding: 0.5rem 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid #2a2a4a;
-        }
-        .risk-table th {
-            color: #aaa;
-            font-weight: 600;
-            font-size: 0.85rem;
-        }
-        .risk-low { color: #00c896; }
-        .risk-medium { color: #f0a500; }
-        .risk-high { color: #e94560; }
-        .subtitle { color: #888; margin-bottom: 1.5rem; }
-    </style>
+    <title>DevOps Agent - Справка</title>
+    <link rel="stylesheet" href="/chat.css">
 </head>
 <body>
-    <div class="container">
-        <a href="/chat" class="back-link">&larr; Back to Chat</a>
-        <h1>DevOps Agent</h1>
-        <p class="subtitle">AI-powered assistant for server administration and DevOps tasks.</p>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/chat" class="nav-link">Чат</a>
+            <a href="/settings" class="nav-link">Настройки</a>
+            <a href="/servers" class="nav-link">Серверы</a>
+            <a href="/help" class="nav-link active">Справка</a>
+        </div>
+        <div class="nav-right"></div>
+    </nav>
 
-        <h2>What is DevOps Agent?</h2>
-        <p>DevOps Agent is an intelligent chat assistant that helps you manage servers, containers, and infrastructure. Describe what you need in natural language, and the agent will suggest specific commands and actions to accomplish it.</p>
+    <div class="page-content">
+        <div class="container">
+            <h1 class="page-title">Справка</h1>
 
-        <h2>How to Use Chat</h2>
-        <ol>
-            <li>Type your question or task description in the message input at the bottom.</li>
-            <li>The AI will analyze your request and respond with an explanation and suggested actions.</li>
-            <li>Review the suggested commands before executing them.</li>
-            <li>Click the <strong>Execute</strong> button on any action to run it on the target server.</li>
-            <li>Results will appear in the chat — you can then ask follow-up questions.</li>
-        </ol>
+            <div class="card">
+                <h2 class="card-title">Что такое DevOps Agent</h2>
+                <p>DevOps Agent — это интеллектуальный чат-ассистент на базе ИИ для администрирования серверов и выполнения DevOps-задач. Опишите задачу на естественном языке, и агент предложит конкретные команды и действия для её выполнения.</p>
+            </div>
 
-        <h2>Toolbar Buttons</h2>
-        <ul>
-            <li><strong>Новый диалог</strong> — Start a fresh conversation. Clears all message history.</li>
-            <li><strong>Промт</strong> — View and customize the system prompt that guides the AI's behavior.</li>
-            <li><strong>Справка</strong> — This help page.</li>
-            <li><strong>Показать детали</strong> — Toggle display of debug information (raw API data, message IDs, etc.).</li>
-        </ul>
+            <div class="card">
+                <h2 class="card-title">Как пользоваться чатом</h2>
+                <ol>
+                    <li>Введите ваш вопрос или описание задачи в поле ввода внизу страницы.</li>
+                    <li>ИИ проанализирует запрос и ответит с объяснением и предложенными действиями.</li>
+                    <li>Просмотрите предложенные команды перед их выполнением.</li>
+                    <li>Нажмите кнопку <strong>Выполнить</strong> на любом действии для запуска на целевом сервере.</li>
+                    <li>Результаты появятся в чате — вы можете задать уточняющие вопросы.</li>
+                </ol>
+            </div>
 
-        <h2>Action Risk Levels</h2>
-        <p>Each suggested command is assigned a risk level to help you make informed decisions:</p>
-        <table class="risk-table">
-            <thead>
-                <tr><th>Level</th><th>Color</th><th>Description</th></tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="risk-low">LOW</td>
-                    <td class="risk-low">Green</td>
-                    <td>Read-only commands that don't modify anything (e.g., <code>ls</code>, <code>docker ps</code>, <code>cat</code>).</td>
-                </tr>
-                <tr>
-                    <td class="risk-medium">MEDIUM</td>
-                    <td class="risk-medium">Yellow</td>
-                    <td>Commands that make changes but are generally safe (e.g., <code>systemctl restart</code>, <code>docker compose up</code>).</td>
-                </tr>
-                <tr>
-                    <td class="risk-high">HIGH</td>
-                    <td class="risk-high">Red</td>
-                    <td>Potentially destructive commands (e.g., <code>rm -rf</code>, <code>docker system prune</code>). Review carefully!</td>
-                </tr>
-            </tbody>
-        </table>
+            <div class="card">
+                <h2 class="card-title">Действия (Actions)</h2>
+                <p>Когда вы описываете задачу, ИИ формирует список предложенных действий. Каждое действие содержит:</p>
+                <ul>
+                    <li><strong>Описание</strong> — что делает команда</li>
+                    <li><strong>Команда</strong> — конкретная команда для выполнения</li>
+                    <li><strong>Сервер</strong> — на каком сервере выполнить</li>
+                    <li><strong>Уровень риска</strong> — насколько опасна команда</li>
+                </ul>
+                <p>Вы можете выполнить действие нажатием кнопки или отклонить его.</p>
+            </div>
 
-        <h3>Read-Only Command Detection</h3>
-        <p>The UI automatically detects read-only commands and marks them accordingly. Commands that are <strong>not</strong> recognized as read-only will display a warning: <em>"This is not a read-only command and may modify the system."</em></p>
+            <div class="card">
+                <h2 class="card-title">Уровни риска</h2>
+                <table class="servers-table">
+                    <thead>
+                        <tr><th>Уровень</th><th>Цвет</th><th>Описание</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="status-online">LOW</span></td>
+                            <td>Зелёный</td>
+                            <td>Команды только для чтения, не изменяют систему (например, <code>ls</code>, <code>docker ps</code>, <code>cat</code>).</td>
+                        </tr>
+                        <tr>
+                            <td><span class="status-warning">MEDIUM</span></td>
+                            <td>Жёлтый</td>
+                            <td>Команды, вносящие изменения, но в целом безопасные (например, <code>systemctl restart</code>, <code>docker compose up</code>).</td>
+                        </tr>
+                        <tr>
+                            <td><span class="status-error-text">HIGH</span></td>
+                            <td>Красный</td>
+                            <td>Потенциально деструктивные команды (например, <code>rm -rf</code>, <code>docker system prune</code>). Проверяйте внимательно!</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
-        <h2>Prompt Customization</h2>
-        <p>You can customize how the AI assistant behaves by modifying the system prompt:</p>
-        <ol>
-            <li>Click the <strong>Промт</strong> button in the toolbar.</li>
-            <li>A modal will appear showing the current system prompt.</li>
-            <li>Edit the prompt text and click <strong>Save</strong> to apply immediately.</li>
-            <li>Alternatively, close the modal and type your new prompt as a chat message — it will be saved automatically.</li>
-        </ol>
-        <p>Your custom prompt overrides the default system instructions. The AI will follow your customized prompt for all subsequent conversations until you change it again.</p>
+            <div class="card">
+                <h2 class="card-title">Read-only команды</h2>
+                <p>Интерфейс автоматически определяет безопасные команды только для чтения. К ним относятся:</p>
+                <ul>
+                    <li><code>ls</code>, <code>pwd</code>, <code>whoami</code>, <code>id</code>, <code>uname</code>, <code>date</code>, <code>uptime</code></li>
+                    <li><code>df</code>, <code>du</code>, <code>free</code></li>
+                    <li><code>ip a</code>, <code>ip route</code>, <code>ss</code>, <code>netstat</code></li>
+                    <li><code>ping</code>, <code>curl</code>, <code>wget</code></li>
+                    <li><code>cat</code>, <code>tail</code>, <code>head</code>, <code>grep</code></li>
+                    <li><code>journalctl</code>, <code>systemctl status</code></li>
+                    <li><code>docker ps</code>, <code>docker logs</code>, <code>docker inspect</code>, <code>docker compose ps</code></li>
+                </ul>
+                <p>Команды, не входящие в этот список, помечаются предупреждением: <em>«Это не read-only команда и может изменить систему.»</em></p>
+            </div>
 
-        <h2>Tips</h2>
-        <ul>
-            <li>Be specific in your requests — mention service names, file paths, and desired outcomes.</li>
-            <li>Use <strong>Новый диалог</strong> to start fresh if the conversation gets too long (limit is 30 messages).</li>
-            <li>Enable <strong>Показать детали</strong> to see raw debug information for troubleshooting.</li>
-            <li>Always review commands before executing, especially those with <span class="risk-high">HIGH</span> risk level.</li>
-        </ul>
+            <div class="card">
+                <h2 class="card-title">Настройка промпта</h2>
+                <p>Вы можете настроить поведение ИИ-ассистента, изменив системный промпт:</p>
+                <ol>
+                    <li>В чате нажмите кнопку промпта или перейдите в настройки.</li>
+                    <li>Откроется модальное окно с текущим системным промптом.</li>
+                    <li>Отредактируйте текст и нажмите <strong>Сохранить</strong>.</li>
+                </ol>
+                <p>Ваш промпт будет использоваться для всех последующих диалогов.</p>
+            </div>
 
-        <p style="margin-top: 2rem; text-align: center;">
-            <a href="/chat" class="back-link">&larr; Back to Chat</a>
-        </p>
+            <div class="card">
+                <h2 class="card-title">Настройка LLM</h2>
+                <p>На странице <a href="/settings">Настройки</a> вы можете:</p>
+                <ul>
+                    <li>Выбрать LLM-сервер из списка настроенных провайдеров</li>
+                    <li>Переопределить модель (если нужна конкретная модель вместо модели по умолчанию)</li>
+                    <li>Включить/выключить режим отладки для отображения технических деталей</li>
+                    <li>Обновить конфигурацию из файлов без перезапуска приложения</li>
+                </ul>
+            </div>
+        </div>
     </div>
 </body>
 </html>

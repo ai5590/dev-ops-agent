@@ -1,0 +1,174 @@
+Нужно доработать существующий проект DevOpsAgent:
+https://github.com/ai5590/dev-ops-agent
+
+Цель: довести до “нормального продукта”:
+- исправить SQLite JDBC ошибку “not implemented”
+- полностью русифицировать UI
+- сделать LLM-провайдеры выбираемыми и пер-пользовательскими
+- добавить вкладки “Чат / Настройки / Серверы”
+- добавить кнопку “Обновить настройки” (reload config + prompt без рестарта)
+- вкладка “Серверы” должна показывать список серверов из ssh-executor-agent
+- всё должно продолжать работать в docker, порт приложения 25003
+- ВАЖНО: НЕ ДЕЛАЙ “безопасные миграции” и не усложняй DDL-апгрейды. Просто работай с текущей БД как есть. Если нужно добавить поля/таблицы — добавь их в DDL и опиши в README, что при обновлении может понадобиться пересоздать data/app.db (или удалить) вручную. (Скрипт обновления делает бэкап config, но БД пользователь решит сам.)
+
+========================
+A) SQLite FIX (JDBC driver “not implemented”)
+========================
+Проблема: SQLite JDBC не поддерживает getGeneratedKeys() / Statement.RETURN_GENERATED_KEYS.
+
+Сделай:
+1) Найди MessageRepository.addMessage() и убери RETURN_GENERATED_KEYS / getGeneratedKeys().
+2) Выполни INSERT обычным PreparedStatement.
+3) Сразу после INSERT на ТОМ ЖЕ Connection выполни:
+   SELECT last_insert_rowid()
+   и верни long id. При ошибке вернуть -1 и логировать.
+4) DDL таблицы messages должен быть:
+   id INTEGER PRIMARY KEY AUTOINCREMENT
+Проверь, чтобы insert не задавал id вручную.
+
+========================
+B) Полная русификация + prompt из файла
+========================
+1) Все страницы, лейблы, кнопки, уведомления, ошибки — НА РУССКОМ.
+2) Промпт агента хранить в файле data/prompt_ru.txt.
+3) Загружать prompt_ru.txt при старте.
+4) По кнопке “Обновить настройки” перечитывать prompt_ru.txt без рестарта.
+
+========================
+C) LLM серверы: несколько провайдеров (OpenAI + Ollama)
+========================
+Расширь data/config.json:
+{
+  "defaults": { "defaultLlmServerId": "openai_default" },
+  "llmServers": [
+    {
+      "id":"openai_default",
+      "title":"OpenAI (официальный)",
+      "type":"OPENAI",
+      "baseUrl":"https://api.openai.com/v1",
+      "apiKeyEnv":"OPENAI_API_KEY",
+      "defaultModel":"gpt-5-mini",
+      "enabled":true
+    },
+    {
+      "id":"ollama_local",
+      "title":"Ollama (локально)",
+      "type":"OLLAMA",
+      "baseUrl":"http://127.0.0.1:11434",
+      "apiKeyEnv":"",
+      "defaultModel":"qwen2.5:7b",
+      "enabled":true
+    }
+  ],
+  "sshAgentBaseUrl":"http://127.0.0.1:25005",
+  "bootstrapUsersMode":"UPSERT",
+  "bootstrapUsers":[{"login":"aidar","password":"pass1"}]
+}
+
+ВАЖНО:
+- Секреты не хранить в config.json. Для OpenAI ключ берём из ENV по имени apiKeyEnv.
+- Обратная совместимость: если llmServers отсутствует, создать дефолт openai_default в памяти.
+
+Абстракция:
+- interface LlmClient
+- OpenAiClient (Chat Completions)
+- OllamaClient (non-stream) используя ТОЧНО endpoint:
+  POST {baseUrl}/api/chat
+  JSON:
+  {
+    "model": "<model>",
+    "stream": false,
+    "messages": [ { "role":"user", "content":"..." }, ... ]
+  }
+  Ответ распарсить из JSON и вернуть текст ассистента.
+
+Сделай LlmClientFactory по type.
+
+========================
+D) Пер-пользователь настройки
+========================
+У каждого пользователя хранить:
+- selectedLlmServerId
+- modelOverride (nullable)
+- showDebug (checkbox “показать детали”)
+- pending_prompt_update (флаг обновления промпта)
+
+Если у пользователя не задан selectedLlmServerId — брать defaults.defaultLlmServerId.
+
+========================
+E) UI вкладки + reload + servers tab
+========================
+UI — static HTML/JS/CSS (без Thymeleaf).
+Сделай страницы:
+- /chat (чат)
+- /settings (настройки)
+- /servers (серверы)
+- /help (справка)
+Все защищены логином.
+
+Верхнее меню (русское):
+- Чат
+- Настройки
+- Серверы
+- Справка
+
+Настройки:
+- dropdown: выбор LLM сервера для текущего пользователя (из enabled llmServers)
+- поле override модели (optional)
+- показать текущий итоговый выбор
+- кнопка “Сохранить”
+- кнопка “Обновить настройки”:
+  - перечитать data/config.json
+  - перечитать data/prompt_ru.txt
+  - применить без рестарта для новых запросов
+  - показать уведомление “Настройки обновлены”
+
+Servers:
+- вызвать GET {sshAgentBaseUrl}/servers
+- красиво показать список/таблицу
+- кнопка “Обновить”
+
+Chat:
+- полностью русский интерфейс
+- предупреждение о лимите 30 сообщений в начале ответа (если достигнут)
+- actions JSON парсить между маркерами START/END
+- показать кнопки “Выполнить 1/2/3”, блокировать на время выполнения
+- debug checkbox “Показать детали”: если включен — показывать сырой JSON действий и детали ssh запроса/ответа в <details>
+
+========================
+ACTIONS JSON
+========================
+Системный промпт (data/prompt_ru.txt) должен требовать:
+- отвечать по-русски
+- кратко, деловой тон
+- в конце предлагать до 3 действий, если уместно
+- действия только в строгом JSON между маркерами:
+  ---ACTIONS_JSON_START---
+  { "actions":[ ... ] }
+  ---ACTIONS_JSON_END---
+
+========================
+SSH EXECUTOR AGENT
+========================
+BaseUrl из config: sshAgentBaseUrl
+- GET /servers
+- POST /exec {server,command}
+После выполнения действия:
+- логировать audit.log: кто, что, результат(snippet), duration
+- результат отправлять обратно в LLM как контекст “пользователь выполнил действие…”
+
+========================
+НЕ ТРОГАТЬ/НЕ УСЛОЖНЯТЬ МИГРАЦИИ
+========================
+Не делай продвинутых миграций. Если добавляешь таблицы — CREATE TABLE IF NOT EXISTS достаточно.
+Если добавляешь колонки и это сложно — просто опиши в README, что можно удалить data/app.db при первом запуске новой версии.
+Главное — исправить текущий SQLite баг и сделать UI/LLM/Reload.
+
+========================
+README / DOCS
+========================
+- Обнови README.md так, чтобы было понятно другим агентам/разработчикам что это за dev-ops-agent, как запускать, как настраивать OpenAI и Ollama, как выбрать провайдера в UI.
+- Интерфейс на русском.
+- docs/* должны быть понятными и объяснять структуру проекта.
+
+После изменений сделай commit и push в GitHub repo ai5590/dev-ops-agent.

@@ -20,4 +20,14 @@ public class PageController {
     public String login() {
         return "forward:/login.html";
     }
+
+    @GetMapping("/settings")
+    public String settings() {
+        return "forward:/settings.html";
+    }
+
+    @GetMapping("/servers")
+    public String servers() {
+        return "forward:/servers.html";
+    }
 }

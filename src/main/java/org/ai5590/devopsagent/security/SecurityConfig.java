@@ -30,7 +30,7 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(requestHandler)
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/login", "/login.html", "/css/**", "/js/**", "/favicon.ico").permitAll()
+                .requestMatchers("/login", "/login.html", "/*.css", "/*.js", "/css/**", "/js/**", "/favicon.ico").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form

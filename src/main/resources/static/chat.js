@@ -1,9 +1,9 @@
-var lastMessageId = 0;
-var showDebug = false;
-var isSending = false;
-var pollTimer = null;
+let lastMessageId = 0;
+let showDebug = false;
+let pollingInterval = null;
+let isSending = false;
 
-var READ_ONLY_PREFIXES = [
+const READ_ONLY_PREFIXES = [
     'ls', 'pwd', 'whoami', 'id', 'uname', 'date', 'uptime', 'df', 'du', 'free',
     'ip a', 'ip route', 'ss ', 'netstat ',
     'ping', 'curl ', 'wget ',
@@ -12,366 +12,269 @@ var READ_ONLY_PREFIXES = [
     'docker ps', 'docker logs', 'docker inspect', 'docker compose ps'
 ];
 
-function getCookie(name) {
-    var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-    return match ? decodeURIComponent(match[2]) : null;
+function getCsrfToken() {
+    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
 }
 
-function csrfHeaders() {
-    var token = getCookie('XSRF-TOKEN');
-    var headers = { 'Content-Type': 'application/json' };
-    if (token) {
-        headers['X-XSRF-TOKEN'] = token;
+async function apiFetch(url, options = {}) {
+    const defaults = {
+        headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': getCsrfToken() },
+        credentials: 'same-origin'
+    };
+    const merged = { ...defaults, ...options, headers: { ...defaults.headers, ...(options.headers || {}) } };
+    const resp = await fetch(url, merged);
+    if (resp.status === 401 || resp.status === 403) {
+        window.location.href = '/login';
+        throw new Error('Сессия истекла');
     }
-    return headers;
+    return resp;
 }
 
-function apiGet(url) {
-    return fetch(url, { credentials: 'same-origin' }).then(function(r) {
-        if (r.status === 401 || r.status === 403) {
-            window.location.href = '/login';
-            throw new Error('Unauthorized');
+async function init() {
+    try {
+        const resp = await apiFetch('/api/user/id');
+        const data = await resp.json();
+        showDebug = data.showDebug || false;
+        const cb = document.getElementById('showDebugCheckbox');
+        if (cb) cb.checked = showDebug;
+    } catch (e) { console.error(e); }
+    await loadState();
+    pollingInterval = setInterval(loadState, 2000);
+}
+
+async function loadState() {
+    try {
+        const resp = await apiFetch('/api/chat/state?since=' + lastMessageId);
+        const data = await resp.json();
+        if (data.messages && data.messages.length > 0) {
+            renderMessages(data.messages, data.hasActions, data.actionsJson);
         }
-        return r.json();
-    });
+    } catch (e) {}
 }
 
-function apiPost(url, body) {
-    return fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: csrfHeaders(),
-        body: body !== undefined ? JSON.stringify(body) : undefined
-    }).then(function(r) {
-        if (r.status === 401 || r.status === 403) {
-            window.location.href = '/login';
-            throw new Error('Unauthorized');
+function renderMessages(messages, hasActions, actionsJson) {
+    const container = document.getElementById('chatMessages');
+    for (const msg of messages) {
+        const id = msg.id;
+        if (id > lastMessageId) lastMessageId = id;
+        if (document.getElementById('msg-' + id)) continue;
+        const div = document.createElement('div');
+        div.id = 'msg-' + id;
+        div.className = 'message msg-' + msg.role;
+        div.innerHTML = '<div class="msg-content">' + formatContent(msg.content) + '</div>';
+        container.appendChild(div);
+    }
+    if (hasActions && actionsJson) {
+        renderActions(actionsJson);
+    }
+    scrollToBottom();
+}
+
+function formatContent(text) {
+    if (!text) return '';
+    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\n/g, '<br>');
+    return text;
+}
+
+function renderActions(actionsJson) {
+    const existing = document.getElementById('actionsContainer');
+    if (existing) existing.remove();
+    try {
+        const parsed = JSON.parse(actionsJson);
+        if (!parsed.actions || parsed.actions.length === 0) return;
+        const container = document.createElement('div');
+        container.id = 'actionsContainer';
+        container.className = 'actions-container';
+        let html = '<div class="actions-header">Предложенные действия:</div>';
+        for (const action of parsed.actions) {
+            const isReadOnly = isCommandReadOnly(action.params?.command || '');
+            const riskClass = 'risk-' + (action.risk || 'low');
+            html += '<div class="action-card ' + riskClass + '">';
+            html += '<div class="action-title">' + escapeHtml(action.title) + '</div>';
+            html += '<div class="action-desc">' + escapeHtml(action.description) + '</div>';
+            if (action.params?.server) html += '<div class="action-detail">Сервер: ' + escapeHtml(action.params.server) + '</div>';
+            if (action.params?.command) html += '<div class="action-detail">Команда: <code>' + escapeHtml(action.params.command) + '</code></div>';
+            html += '<div class="action-risk">Риск: <span class="' + riskClass + '">' + escapeHtml(action.risk || 'low') + '</span></div>';
+            if (!isReadOnly) html += '<div class="warning-text">⚠️ Это не read-only команда и может изменить систему.</div>';
+            html += '<button class="btn-primary action-btn" onclick="executeAction(\'' + action.id + '\')" id="actionBtn' + action.id + '">Выполнить ' + action.id + '</button>';
+            html += '</div>';
         }
-        return r.json();
-    });
+        if (showDebug) {
+            html += '<details class="debug-details"><summary>JSON действий</summary><pre>' + escapeHtml(actionsJson) + '</pre></details>';
+        }
+        container.innerHTML = html;
+        document.getElementById('chatMessages').appendChild(container);
+        scrollToBottom();
+    } catch (e) { console.error('Error rendering actions', e); }
 }
 
-function isReadOnly(cmd) {
-    var trimmed = cmd.trim();
-    for (var i = 0; i < READ_ONLY_PREFIXES.length; i++) {
-        var prefix = READ_ONLY_PREFIXES[i];
-        if (trimmed === prefix || trimmed.indexOf(prefix) === 0) {
-            if (prefix.charAt(prefix.length - 1) === ' ' || trimmed.length === prefix.length || trimmed.charAt(prefix.length) === ' ') {
-                return true;
+function isCommandReadOnly(command) {
+    const cmd = command.trim();
+    return READ_ONLY_PREFIXES.some(prefix => cmd === prefix.trim() || cmd.startsWith(prefix));
+}
+
+async function sendMessage() {
+    if (isSending) return;
+    const input = document.getElementById('messageInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    isSending = true;
+    updateSendButton(true);
+    showTypingIndicator(true);
+    try {
+        const resp = await apiFetch('/api/chat/send', {
+            method: 'POST',
+            body: JSON.stringify({ text: text })
+        });
+        const data = await resp.json();
+        if (data.promptUpdated) {
+            showNotification(data.message || 'Промпт обновлён');
+        }
+        await loadState();
+    } catch (e) {
+        showNotification('Ошибка отправки: ' + e.message, true);
+    } finally {
+        isSending = false;
+        updateSendButton(false);
+        showTypingIndicator(false);
+    }
+}
+
+async function executeAction(actionId) {
+    const btn = document.getElementById('actionBtn' + actionId);
+    if (btn) { btn.disabled = true; btn.textContent = 'Выполняется...'; }
+    try {
+        const resp = await apiFetch('/api/chat/action/' + actionId, { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = 'message msg-assistant';
+            let content = '<div class="msg-content"><strong>Результат (' + escapeHtml(data.api || '') + '):</strong><pre><code>' + escapeHtml(data.output || '') + '</code></pre>';
+            if (showDebug) {
+                content += '<details class="debug-details"><summary>Детали</summary>';
+                content += '<p>Сервер: ' + escapeHtml(data.server || '-') + '</p>';
+                content += '<p>Команда: ' + escapeHtml(data.command || '-') + '</p>';
+                content += '<p>Время: ' + (data.duration_ms || 0) + ' мс</p>';
+                content += '</details>';
             }
+            content += '</div>';
+            div.innerHTML = content;
+            container.appendChild(div);
+            scrollToBottom();
+        } else {
+            showNotification('Ошибка: ' + (data.error || 'неизвестная ошибка'), true);
         }
+    } catch (e) {
+        showNotification('Ошибка выполнения: ' + e.message, true);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Выполнить ' + actionId; }
     }
-    return false;
+}
+
+async function newChat() {
+    if (!confirm('Начать новый диалог? История будет удалена.')) return;
+    try {
+        await apiFetch('/api/chat/new', { method: 'POST' });
+        document.getElementById('chatMessages').innerHTML = '';
+        lastMessageId = 0;
+        const ac = document.getElementById('actionsContainer');
+        if (ac) ac.remove();
+    } catch (e) {
+        showNotification('Ошибка: ' + e.message, true);
+    }
+}
+
+async function startPromptUpdate() {
+    try {
+        const resp = await apiFetch('/api/prompt/start-update', { method: 'POST' });
+        const data = await resp.json();
+        document.getElementById('promptText').value = data.currentPrompt || '';
+        document.getElementById('promptModal').style.display = 'flex';
+    } catch (e) {
+        showNotification('Ошибка: ' + e.message, true);
+    }
+}
+
+async function submitPrompt() {
+    const text = document.getElementById('promptText').value.trim();
+    if (!text) return;
+    try {
+        await apiFetch('/api/prompt/submit', {
+            method: 'POST',
+            body: JSON.stringify({ text: text })
+        });
+        document.getElementById('promptModal').style.display = 'none';
+        showNotification('Промпт обновлён');
+    } catch (e) {
+        showNotification('Ошибка: ' + e.message, true);
+    }
+}
+
+function closePromptModal() {
+    document.getElementById('promptModal').style.display = 'none';
+}
+
+function toggleDebug() {
+    const cb = document.getElementById('showDebugCheckbox');
+    showDebug = cb.checked;
+    apiFetch('/api/user/settings/debug', {
+        method: 'POST',
+        body: JSON.stringify({ showDebug: showDebug })
+    }).catch(e => console.error(e));
+}
+
+function scrollToBottom() {
+    const container = document.getElementById('chatMessages');
+    if (container) container.scrollTop = container.scrollHeight;
+}
+
+function showTypingIndicator(show) {
+    const el = document.getElementById('typingIndicator');
+    if (el) el.style.display = show ? 'flex' : 'none';
+}
+
+function updateSendButton(disabled) {
+    const btn = document.getElementById('sendBtn');
+    if (btn) {
+        btn.disabled = disabled;
+        btn.textContent = disabled ? 'Отправка...' : 'Отправить';
+    }
+}
+
+function showNotification(msg, isError) {
+    const existing = document.getElementById('notification');
+    if (existing) existing.remove();
+    const div = document.createElement('div');
+    div.id = 'notification';
+    div.className = 'notification ' + (isError ? 'status-error' : 'status-success');
+    div.textContent = msg;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
 }
 
 function escapeHtml(text) {
-    var div = document.createElement('div');
+    if (!text) return '';
+    const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-function renderMarkdown(text) {
-    var escaped = escapeHtml(text);
-    var html = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, function(m, lang, code) {
-        return '<pre><code>' + code.trim() + '</code></pre>';
-    });
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    var lines = html.split('\n');
-    var result = [];
-    var inPre = false;
-    for (var i = 0; i < lines.length; i++) {
-        if (lines[i].indexOf('<pre>') !== -1) inPre = true;
-        if (inPre) {
-            result.push(lines[i]);
-        } else if (lines[i].trim() === '') {
-            result.push('</p><p>');
-        } else {
-            result.push(lines[i]);
-        }
-        if (lines[i].indexOf('</pre>') !== -1) inPre = false;
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+    const input = document.getElementById('messageInput');
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        });
+        input.addEventListener('input', () => {
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        });
     }
-    return '<p>' + result.join('\n') + '</p>';
-}
-
-function renderActions(actionsJson) {
-    if (!actionsJson) return '';
-    var actions;
-    try {
-        actions = JSON.parse(actionsJson);
-    } catch (e) {
-        return '';
-    }
-    if (!Array.isArray(actions)) {
-        if (actions.actions) actions = actions.actions;
-        else return '';
-    }
-    var html = '';
-    for (var i = 0; i < actions.length; i++) {
-        var a = actions[i];
-        var id = a.id || (i + 1);
-        var cmd = a.command || a.cmd || '';
-        var api = a.api || 'ssh';
-        var risk = (a.risk_level || a.riskLevel || 'medium').toLowerCase();
-        var desc = a.description || a.desc || '';
-        var riskClass = 'risk-medium';
-        if (risk === 'low') riskClass = 'risk-low';
-        else if (risk === 'high') riskClass = 'risk-high';
-
-        var readOnly = isReadOnly(cmd);
-
-        html += '<div class="action-card">';
-        html += '<div class="action-header">';
-        html += '<span class="action-api">' + escapeHtml(api) + '</span>';
-        html += '<span class="risk-badge ' + riskClass + '">' + escapeHtml(risk) + '</span>';
-        html += '</div>';
-        if (desc) {
-            html += '<div class="action-desc">' + escapeHtml(desc) + '</div>';
-        }
-        html += '<div class="action-command">' + escapeHtml(cmd) + '</div>';
-        if (!readOnly) {
-            html += '<div class="warning-msg">⚠ This is not a read-only command and may modify the system.</div>';
-        }
-        html += '<button class="btn-execute" onclick="executeAction(\'' + escapeHtml(String(id)) + '\')" id="btnAction' + id + '">Execute ' + id + '</button>';
-        html += '</div>';
-    }
-    return html;
-}
-
-function addMessageToUI(role, text, debugData) {
-    var container = document.getElementById('messages');
-    var div = document.createElement('div');
-    div.className = 'message message-' + role;
-
-    if (role === 'assistant') {
-        div.innerHTML = renderMarkdown(text);
-    } else {
-        div.textContent = text;
-    }
-
-    if (debugData && showDebug) {
-        var details = document.createElement('details');
-        var summary = document.createElement('summary');
-        summary.textContent = 'Debug info';
-        var pre = document.createElement('pre');
-        pre.textContent = JSON.stringify(debugData, null, 2);
-        details.appendChild(summary);
-        details.appendChild(pre);
-        div.appendChild(details);
-    }
-
-    container.appendChild(div);
-    scrollToBottom();
-}
-
-function addActionsToUI(actionsJson) {
-    var html = renderActions(actionsJson);
-    if (!html) return;
-    var container = document.getElementById('messages');
-    var div = document.createElement('div');
-    div.className = 'message message-assistant';
-    div.innerHTML = html;
-    container.appendChild(div);
-    scrollToBottom();
-}
-
-function addSystemMessage(text, className) {
-    var container = document.getElementById('messages');
-    var div = document.createElement('div');
-    div.className = className || 'prompt-updated-msg';
-    div.textContent = text;
-    container.appendChild(div);
-    scrollToBottom();
-}
-
-function scrollToBottom() {
-    var area = document.getElementById('chatArea');
-    setTimeout(function() {
-        area.scrollTop = area.scrollHeight;
-    }, 50);
-}
-
-function showTyping() {
-    document.getElementById('typing').classList.remove('hidden');
-    scrollToBottom();
-}
-
-function hideTyping() {
-    document.getElementById('typing').classList.add('hidden');
-}
-
-function setInputEnabled(enabled) {
-    document.getElementById('userInput').disabled = !enabled;
-    document.getElementById('btnSend').disabled = !enabled;
-    isSending = !enabled;
-}
-
-function loadState() {
-    apiGet('/api/chat/state?since=' + lastMessageId).then(function(data) {
-        var msgs = data.messages || [];
-        for (var i = 0; i < msgs.length; i++) {
-            var m = msgs[i];
-            var msgId = m.id || 0;
-            if (msgId > lastMessageId) {
-                lastMessageId = msgId;
-            }
-            addMessageToUI(m.role, m.content || m.text || '', showDebug ? m : null);
-        }
-        if (data.hasActions && data.actionsJson && msgs.length > 0) {
-            addActionsToUI(data.actionsJson);
-        }
-    }).catch(function(e) {
-        if (e.message !== 'Unauthorized') {
-            console.error('loadState error:', e);
-        }
-    });
-}
-
-function sendMessage() {
-    var input = document.getElementById('userInput');
-    var text = input.value.trim();
-    if (!text || isSending) return;
-
-    addMessageToUI('user', text);
-    input.value = '';
-    autoResizeInput();
-    setInputEnabled(false);
-    showTyping();
-
-    apiPost('/api/chat/send', { text: text }).then(function(data) {
-        hideTyping();
-        setInputEnabled(true);
-
-        if (data.promptUpdated) {
-            addSystemMessage(data.message || 'System prompt updated.');
-            return;
-        }
-
-        if (data.error) {
-            addMessageToUI('assistant', 'Error: ' + data.error);
-            return;
-        }
-
-        addMessageToUI('assistant', data.text || '', showDebug ? data : null);
-
-        if (data.hasActions && data.actionsJson) {
-            addActionsToUI(data.actionsJson);
-        }
-
-        loadState();
-    }).catch(function(e) {
-        hideTyping();
-        setInputEnabled(true);
-        if (e.message !== 'Unauthorized') {
-            addMessageToUI('assistant', 'Error sending message. Please try again.');
-        }
-    });
-}
-
-function newChat() {
-    apiPost('/api/chat/new', {}).then(function() {
-        document.getElementById('messages').innerHTML = '';
-        lastMessageId = 0;
-        addSystemMessage('New conversation started.');
-    }).catch(function(e) {
-        if (e.message !== 'Unauthorized') {
-            alert('Error starting new chat.');
-        }
-    });
-}
-
-function executeAction(id) {
-    var btn = document.getElementById('btnAction' + id);
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Executing...';
-    }
-
-    apiPost('/api/chat/action/' + id, {}).then(function(data) {
-        if (btn) {
-            btn.textContent = 'Done';
-        }
-        if (data.error) {
-            addMessageToUI('assistant', 'Action error: ' + data.error);
-        } else {
-            loadState();
-        }
-    }).catch(function(e) {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Execute ' + id;
-        }
-        if (e.message !== 'Unauthorized') {
-            addMessageToUI('assistant', 'Error executing action. Please try again.');
-        }
-    });
-}
-
-function startPromptUpdate() {
-    apiPost('/api/prompt/start-update', {}).then(function(data) {
-        document.getElementById('promptText').value = data.currentPrompt || '';
-        document.getElementById('promptOverlay').classList.remove('hidden');
-    }).catch(function(e) {
-        if (e.message !== 'Unauthorized') {
-            alert('Error loading prompt.');
-        }
-    });
-}
-
-function submitPrompt() {
-    var text = document.getElementById('promptText').value.trim();
-    if (!text) {
-        alert('Prompt text cannot be empty.');
-        return;
-    }
-    apiPost('/api/prompt/submit', { text: text }).then(function() {
-        closePromptModal();
-        addSystemMessage('System prompt updated successfully.');
-    }).catch(function(e) {
-        if (e.message !== 'Unauthorized') {
-            alert('Error saving prompt.');
-        }
-    });
-}
-
-function closePromptModal() {
-    document.getElementById('promptOverlay').classList.add('hidden');
-}
-
-function toggleDebug() {
-    showDebug = document.getElementById('chkDebug').checked;
-    apiPost('/api/user/settings/debug', { showDebug: showDebug }).catch(function(e) {
-        console.error('toggleDebug error:', e);
-    });
-}
-
-function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-}
-
-function autoResizeInput() {
-    var el = document.getElementById('userInput');
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    var input = document.getElementById('userInput');
-    input.addEventListener('input', autoResizeInput);
-
-    apiGet('/api/user/id').then(function(data) {
-        showDebug = data.showDebug || false;
-        document.getElementById('chkDebug').checked = showDebug;
-        loadState();
-    }).catch(function(e) {
-        if (e.message !== 'Unauthorized') {
-            console.error('init error:', e);
-            loadState();
-        }
-    });
-
-    pollTimer = setInterval(loadState, 2000);
 });

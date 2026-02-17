@@ -42,7 +42,9 @@ public class DatabaseInitializer {
             stmt.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS user_settings (
                     user_login TEXT PRIMARY KEY,
-                    show_debug INTEGER DEFAULT 0
+                    show_debug INTEGER DEFAULT 0,
+                    selected_llm_server_id TEXT,
+                    model_override TEXT
                 )
             """);
             stmt.executeUpdate("""

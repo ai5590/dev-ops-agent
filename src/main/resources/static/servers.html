@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Agent - Серверы</title>
+    <link rel="stylesheet" href="/chat.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/chat" class="nav-link">Чат</a>
+            <a href="/settings" class="nav-link">Настройки</a>
+            <a href="/servers" class="nav-link active">Серверы</a>
+            <a href="/help" class="nav-link">Справка</a>
+        </div>
+        <div class="nav-right"></div>
+    </nav>
+
+    <div class="page-content">
+        <div class="container">
+            <div class="card">
+                <div class="card-header-row">
+                    <h2 class="card-title">Серверы SSH</h2>
+                    <button class="btn-secondary" onclick="loadServers()">Обновить</button>
+                </div>
+
+                <div id="serversLoading" class="spinner-container" style="display:none;">
+                    <div class="spinner"></div>
+                    <span>Загрузка...</span>
+                </div>
+
+                <div id="serversError" class="status-message status-error" style="display:none;"></div>
+
+                <div id="serversList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function getCsrfToken() {
+            var match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
+        function apiFetch(url, options) {
+            options = options || {};
+            var headers = { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': getCsrfToken() };
+            options.headers = headers;
+            options.credentials = 'same-origin';
+            return fetch(url, options).then(function(r) {
+                if (r.status === 401 || r.status === 403) {
+                    window.location.href = '/login';
+                    throw new Error('Сессия истекла');
+                }
+                return r.json();
+            });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function loadServers() {
+            var loading = document.getElementById('serversLoading');
+            var errorEl = document.getElementById('serversError');
+            var list = document.getElementById('serversList');
+
+            loading.style.display = 'flex';
+            errorEl.style.display = 'none';
+            list.innerHTML = '';
+
+            apiFetch('/api/servers').then(function(data) {
+                loading.style.display = 'none';
+                var servers = data.servers || data || [];
+                if (servers.length === 0) {
+                    list.innerHTML = '<p class="text-muted">Нет доступных серверов</p>';
+                    return;
+                }
+                var html = '<table class="servers-table"><thead><tr>';
+                html += '<th>Имя</th><th>Хост</th><th>Порт</th><th>Статус</th>';
+                html += '</tr></thead><tbody>';
+                for (var i = 0; i < servers.length; i++) {
+                    var s = servers[i];
+                    var statusClass = s.status === 'online' ? 'status-online' : 'status-offline';
+                    var statusText = s.status === 'online' ? 'Онлайн' : (s.status || 'Неизвестно');
+                    html += '<tr>';
+                    html += '<td>' + escapeHtml(s.name || s.host || '-') + '</td>';
+                    html += '<td>' + escapeHtml(s.host || '-') + '</td>';
+                    html += '<td>' + escapeHtml(String(s.port || 22)) + '</td>';
+                    html += '<td><span class="' + statusClass + '">' + escapeHtml(statusText) + '</span></td>';
+                    html += '</tr>';
+                }
+                html += '</tbody></table>';
+                list.innerHTML = html;
+            }).catch(function(e) {
+                loading.style.display = 'none';
+                errorEl.textContent = 'Не удалось подключиться к серверу: ' + e.message;
+                errorEl.style.display = 'block';
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadServers);
+    </script>
+</body>
+</html>

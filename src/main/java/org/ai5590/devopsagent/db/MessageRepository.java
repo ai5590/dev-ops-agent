@@ -17,16 +17,18 @@ public class MessageRepository {
     }
 
     public long addMessage(String userLogin, String role, String content) {
-        try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                "INSERT INTO messages (user_login, role, content) VALUES (?, ?, ?)",
-                Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, userLogin);
-            ps.setString(2, role);
-            ps.setString(3, content);
-            ps.executeUpdate();
-            ResultSet keys = ps.getGeneratedKeys();
-            if (keys.next()) return keys.getLong(1);
+        try (Connection conn = db.getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO messages (user_login, role, content) VALUES (?, ?, ?)")) {
+                ps.setString(1, userLogin);
+                ps.setString(2, role);
+                ps.setString(3, content);
+                ps.executeUpdate();
+            }
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT last_insert_rowid()")) {
+                if (rs.next()) return rs.getLong(1);
+            }
         } catch (SQLException e) {
             log.error("Error adding message: {}", e.getMessage());
         }

@@ -44,7 +44,7 @@ public class ChatService {
             userRepository.setPromptOverride(userLogin, text);
             userRepository.setPendingPromptUpdate(userLogin, false);
             response.put("promptUpdated", true);
-            response.put("message", "System prompt updated successfully.");
+            response.put("message", "Системный промпт обновлён.");
             return response;
         }
 
@@ -56,16 +56,16 @@ public class ChatService {
 
         String promptOverride = userRepository.getPromptOverride(userLogin);
         String part1 = (promptOverride != null && !promptOverride.isBlank())
-                ? promptOverride : configLoader.loadSystemPromptPart1Default();
+                ? promptOverride : configLoader.getCachedPromptPart1();
         String part2 = configLoader.loadSystemPromptPart2();
         String systemPrompt = part1 + "\n\n" + part2;
 
-        String aiResponse = openAiService.chat(systemPrompt, history);
+        String aiResponse = openAiService.chat(systemPrompt, history, userLogin);
         ActionParser.ParseResult parsed = actionParser.parse(aiResponse);
 
         String displayText = parsed.getTextContent();
         if (limitReached) {
-            displayText = "\u26a0\ufe0f History reached limit (30 messages). Oldest messages will be displaced.\n\n" + displayText;
+            displayText = "\u26a0\ufe0f История диалога достигла лимита (30 сообщений). Самые старые сообщения будут вытесняться.\n\n" + displayText;
         }
 
         messageRepository.addMessage(userLogin, "assistant", parsed.getTextContent());

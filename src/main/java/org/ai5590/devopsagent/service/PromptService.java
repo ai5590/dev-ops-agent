@@ -21,7 +21,7 @@ public class PromptService {
         userRepository.setPendingPromptUpdate(userLogin, true);
         String currentPrompt = userRepository.getPromptOverride(userLogin);
         if (currentPrompt == null || currentPrompt.isBlank()) {
-            currentPrompt = configLoader.loadSystemPromptPart1Default();
+            currentPrompt = configLoader.getCachedPromptPart1();
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("currentPrompt", currentPrompt);
