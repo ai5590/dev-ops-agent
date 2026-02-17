@@ -1,0 +1,39 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.0'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'org.ai5590.devopsagent'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = '17'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.xerial:sqlite-jdbc:3.44.1.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'org.springframework.boot:spring-boot-starter-logging'
+    implementation 'org.springframework.security:spring-security-crypto'
+}
+
+springBoot {
+    mainClass = 'org.ai5590.devopsagent.app.DevOpsAgentApplication'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'org.ai5590.devopsagent.app.DevOpsAgentApplication'
+    }
+}
+
+bootJar {
+    enabled = true
+}

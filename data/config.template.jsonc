@@ -1,0 +1,40 @@
+{
+  // OpenAI API Configuration
+  // Your OpenAI API key for accessing GPT models
+  "openaiApiKey": "sk-...",
+  
+  // Base URL for OpenAI API (default: https://api.openai.com/v1)
+  // Can be overridden for custom endpoints or proxies
+  "openaiBaseUrl": "https://api.openai.com/v1",
+  
+  // Model to use for the DevOps Agent
+  // Available options:
+  //   - "gpt-4o-mini"      (faster, cheapest, recommended for testing)
+  //   - "gpt-4o"           (balanced performance and cost)
+  //   - "gpt-4-turbo"      (high performance, higher cost)
+  //   - "gpt-3.5-turbo"    (budget option, older model)
+  //   - "o1-mini"          (reasoning model, slower)
+  //   - "o1-preview"       (advanced reasoning, slowest)
+  "openaiModel": "gpt-4o-mini",
+  
+  // SSH Agent Base URL
+  // For Docker container: "http://ssh-executor-agent:25005"
+  // For host network: "http://127.0.0.1:25005"
+  // For remote server: "http://your-server:25005"
+  "sshAgentBaseUrl": "http://127.0.0.1:25005",
+  
+  // Bootstrap Users Mode
+  // - "UPSERT": Create users if they don't exist, update if they do (recommended)
+  // - "CREATE_ONLY": Only create new users, skip existing ones
+  "bootstrapUsersMode": "UPSERT",
+  
+  // Bootstrap Users: Initial users to create on startup
+  // Passwords will be hashed using bcrypt
+  // Remove this array if no bootstrap users are needed
+  "bootstrapUsers": [
+    {
+      "login": "admin",
+      "password": "CHANGE_ME"
+    }
+  ]
+}

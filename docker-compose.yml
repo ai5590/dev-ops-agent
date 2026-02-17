@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  dev-ops-agent:
+    build: .
+    ports:
+      - "25003:25003"
+    volumes:
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

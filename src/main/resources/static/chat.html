@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DevOps Agent</title>
+    <link rel="stylesheet" href="/chat.css">
+</head>
+<body>
+    <div id="app">
+        <header id="toolbar">
+            <div class="toolbar-left">
+                <button id="btnNewChat" onclick="newChat()">Новый диалог</button>
+                <button id="btnPrompt" onclick="startPromptUpdate()">Промт</button>
+                <a href="/help" class="toolbar-btn">Справка</a>
+            </div>
+            <div class="toolbar-right">
+                <label class="toggle-label">
+                    <input type="checkbox" id="chkDebug" onchange="toggleDebug()">
+                    <span>Показать детали</span>
+                </label>
+            </div>
+        </header>
+
+        <main id="chatArea">
+            <div id="messages"></div>
+            <div id="typing" class="typing-indicator hidden">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            </div>
+        </main>
+
+        <footer id="inputBar">
+            <textarea id="userInput" placeholder="Введите сообщение..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
+            <button id="btnSend" onclick="sendMessage()">&#9654;</button>
+        </footer>
+
+        <div id="promptOverlay" class="overlay hidden">
+            <div class="modal">
+                <h3>System Prompt</h3>
+                <p class="modal-hint">Edit the prompt below and save, or close and type your next message in chat — it will be saved as the new prompt.</p>
+                <textarea id="promptText" rows="12"></textarea>
+                <div class="modal-actions">
+                    <button onclick="submitPrompt()" class="btn-primary">Save</button>
+                    <button onclick="closePromptModal()" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/chat.js"></script>
+</body>
+</html>
