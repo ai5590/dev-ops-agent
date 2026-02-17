@@ -1,0 +1,225 @@
+Сгенерируй полный репозиторий проекта и сразу залей его в GitHub в репозиторий:
+https://github.com/ai5590/dev-ops-agent
+Имя репозитория и приложения: dev-ops-agent
+
+ВАЖНО ПРО GIT:
+- Инициализируй git в проекте.
+- Добавь origin на GitHub репозиторий ai5590/dev-ops-agent.
+- Если репо не существует, попробуй создать (если есть права). Если создать нельзя — выведи инструкции в README как создать вручную.
+- Выполни commit и push в main.
+- Не храни секреты в репозитории. data/config.json должен быть шаблонным (плейсхолдеры). Реальный ключ пользователь вставит сам.
+
+ЦЕЛЬ ПРОЕКТА
+dev-ops-agent — mini-сайт (HTTP) с мобильным интерфейсом чата:
+- login/password multi-user
+- один чат на пользователя, синхронится между устройствами
+- официальный OpenAI API (модель настраивается, по умолчанию gpt-5-mini)
+- выполнение действий через внешний сервис ssh-executor-agent по HTTP
+- UI: статический HTML+JS+CSS (без Thymeleaf)
+- HTTPS будет обеспечен снаружи (например Caddy), приложение слушает порт 25003
+
+ТЕХНОЛОГИИ
+- Java 17
+- Gradle
+- Spring Boot (web + security)
+- SQLite (org.xerial:sqlite-jdbc), БД: data/app.db
+- Jackson
+- java.net.http.HttpClient
+- Frontend: src/main/resources/static/chat.html + chat.js + chat.css (mobile-first)
+- CSRF включён: CookieCsrfTokenRepository, JS читает cookie XSRF-TOKEN и шлёт header X-XSRF-TOKEN во все POST.
+
+ПОРТ
+По умолчанию server.port=25003 (application.properties).
+
+КОНФИГ (data/config.json)
+Строгий JSON без комментариев. Пример:
+{
+  "openaiApiKey": "PUT_KEY",
+  "openaiBaseUrl": "https://api.openai.com/v1",
+  "openaiModel": "gpt-5-mini",
+  "sshAgentBaseUrl": "http://127.0.0.1:25005",
+  "bootstrapUsersMode": "UPSERT",
+  "bootstrapUsers": [
+    {"login":"aidar","password":"pass1"},
+    {"login":"anna","password":"pass2"}
+  ]
+}
+Создай также data/config.template.jsonc с комментариями и вариантами моделей.
+
+BOOTSTRAP USERS (Вариант A)
+При старте приложения синхронизируй пользователей из config в SQLite:
+- пароль хранить только как bcrypt hash
+- режим UPSERT: создаёт отсутствующих и обновляет пароль у существующих
+- режим CREATE_ONLY: создаёт отсутствующих, существующих не меняет
+Подробно опиши это в data/README.md и docs/DEV_GUIDE.md.
+
+PROMPTS
+Файлы в data:
+- data/system_prompt_part1_default.txt (дефолт для всех)
+- data/system_prompt_part2_apis.md (описание API: ssh.list_servers и ssh.execute)
+Персональный part1 override хранить в SQLite:
+- у каждого пользователя может быть свой part1_override (NULL => использовать default файл)
+Обновление промта:
+- кнопка “Промт” в UI: показывает текущий part1 и ставит pending_prompt_update=1
+- следующее сообщение пользователя сохраняется как part1_override (только для него) и НЕ отправляется в OpenAI.
+
+ИСТОРИЯ
+- один чат на пользователя (общая переписка на логин)
+- хранить в SQLite таблице messages
+- при запросе к OpenAI брать последние 30 сообщений
+- если у пользователя уже достигнут лимит (>=30), то к ответу в UI добавлять в начале предупреждение:
+  "⚠️ История диалога достигла лимита (30 сообщений). Самые старые сообщения будут вытесняться."
+
+ACTIONS (строгий JSON)
+Модель может предложить до 3 действий. Действия выводятся только если есть и строго между маркерами:
+---ACTIONS_JSON_START---
+{ "actions":[ ... ] }
+---ACTIONS_JSON_END---
+Если действий нет — маркеры не выводить.
+
+Схема:
+{
+  "actions": [
+    {
+      "id": "1",
+      "api": "ssh.execute" | "ssh.list_servers",
+      "title": "коротко",
+      "description": "что сделает",
+      "risk": "low" | "medium" | "high",
+      "params": { ... }
+    }
+  ]
+}
+ssh.execute params: { "server":"core01", "command":"uname -a" }
+ssh.list_servers params может отсутствовать.
+
+UI действий:
+- показывать preview (server/command), risk
+- если команда НЕ read-only (по списку префиксов ниже) — показать предупреждение:
+  "⚠️ Это не read-only команда и может изменить систему."
+- кнопки “Выполнить 1/2/3”, блокировать на время выполнения
+
+Read-only префиксы (только для пометки):
+ls, pwd, whoami, id, uname, date, uptime, df, du, free,
+ip a, ip route, ss , netstat ,
+ping, curl , wget ,
+cat , tail , head , grep ,
+journalctl , systemctl status,
+docker ps, docker logs, docker inspect, docker compose ps
+
+SSH-EXECUTOR-AGENT интеграция
+Base URL: sshAgentBaseUrl
+- GET {base}/servers -> { "result": "..." }
+- POST {base}/exec body { "server":"...", "command":"..." } -> { "result":"..." }
+
+DEBUG UI
+Чекбокс “Показать детали”:
+- если включен: показывать сырой actions JSON и детали ssh запроса/ответа внутри <details>
+- по умолчанию выключен
+- флаг хранить в SQLite user_settings.show_debug
+
+СИНХРОНИЗАЦИЯ МЕЖДУ УСТРОЙСТВАМИ
+Сделай простой polling в chat.js:
+- каждые 2 секунды GET /api/chat/state?since=<lastMessageId>
+- сервер возвращает новые сообщения и текущие actions
+- это обеспечивает синхронизацию между устройствами под одним логином
+
+AUTH
+Spring Security form login:
+- /login
+- /chat (защищено)
+- /help (защищено)
+
+ENDPOINTS
+Страницы:
+- GET /chat
+- GET /help
+- GET /login
+
+API:
+- POST /api/chat/send { "text": "..." }
+- POST /api/chat/new
+- POST /api/chat/action/{id}
+- GET  /api/chat/state?since=<id>
+- POST /api/prompt/start-update
+- POST /api/prompt/submit { "text": "..." }
+- GET /api/user/id
+
+КНОПКИ В UI
+В chat.html сделай верхнюю панель:
+- Новый диалог
+- Промт
+- Справка
+- чекбокс Показать детали
+Нижняя панель ввода закреплена.
+
+ЛОГИ И АУДИТ
+Настрой logback:
+- data/logs/app.log (rolling)
+- data/logs/audit.log (rolling)
+В audit.log писать: timestamp, login, action(api), server, command, duration_ms, result_snippet.
+Также сохраняй это в таблицу audit.
+
+DOCKER (для dev-ops-agent)
+Добавь в репо:
+- Dockerfile (multi-stage или простой) для сборки и запуска jar
+- docker-compose.yml:
+  - порт 25003:25003
+  - volume ./data:/app/data
+  - в Linux обеспечь доступ контейнера к хосту, чтобы он мог достучаться до ssh-executor-agent на 127.0.0.1:25005:
+    добавь
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+    и в data/README.md объясни:
+      если dev-ops-agent в docker, то sshAgentBaseUrl лучше поставить http://host.docker.internal:25005
+      если запуск на хосте без docker — можно http://127.0.0.1:25005
+
+DATA ФАЙЛЫ
+Создай папку data/ и положи:
+- config.json (валидный JSON, но с плейсхолдерами)
+- config.template.jsonc (с комментариями)
+- system_prompt_part1_default.txt
+- system_prompt_part2_apis.md
+- README.md (очень понятный, для других агентов: что это за агент, структура, как настроить, как запустить, как добавить пользователя, как поменять модель, как подключить ssh-executor-agent docker)
+
+DOCS (для нейросетей/openhands)
+Создай папку docs/ и положи:
+- PROJECT_SPEC.md (подробная спецификация)
+- ARCHITECTURE.md
+- DB_SCHEMA.md
+- PROMPTS_AND_ACTIONS.md
+- SECURITY.md
+- DEV_GUIDE.md
+- OPENHANDS_HINTS.md
+Заполни содержимым, чтобы любой кодогенератор мог понять и дорабатывать.
+
+ROOT README.md
+Сделай понятный README.md на английском (или двуязычный), который объясняет:
+- что такое dev-ops-agent
+- как настроить data/config.json
+- как добавить bootstrapUsers
+- как запустить локально и в docker-compose
+- как подключить ssh-executor-agent
+- безопасность (пароли хэшируются, логи аудита)
+
+КОДОВАЯ СТРУКТУРА (пакеты)
+org.ai5590.devopsagent (можно так):
+- app/
+- config/
+- db/
+- security/
+- api/
+- service/
+- openai/
+- sshagent/
+- actions/
+- audit/
+
+СОБЛЮДАЙ:
+- никаких секретов в git
+- код компилируется
+- приложение стартует на 25003
+- UI удобен на телефоне
+- кнопки блокируются во время запросов
+- ssh ответы и raw JSON скрыты и раскрываются по желанию
+- после генерации: git add/commit/push в ai5590/dev-ops-agent
